@@ -12,6 +12,9 @@ import org.testcontainers.containers.MySQLContainer;
 @SpringBootTest
 public abstract class AbstractIntegrationTest {
 
+    /** A fake signing secret for tests only (at least 32 bytes). */
+    public static final String TEST_JWT_SECRET = "test-only-fake-jwt-secret-0123456789abcdef";
+
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0")
             .withDatabaseName("contractiq_test")
             .withUsername("test")
@@ -26,5 +29,6 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
+        registry.add("app.jwt.secret", () -> TEST_JWT_SECRET);
     }
 }
