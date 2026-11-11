@@ -1,6 +1,6 @@
 # deploy
 
-Docker Compose and deployment notes (AWS and Azure). Currently holds `docker-compose.yml`, which runs MySQL 8 and MongoDB 7 bound to `127.0.0.1` only. Deployment notes will be added in later phases.
+Docker Compose and deployment notes (AWS and Azure). Currently holds `docker-compose.yml`, which runs MySQL 8 and MongoDB 7 bound to `127.0.0.1` only. MySQL is published on host port **3307** (container port 3306); MongoDB uses 27017. Deployment notes will be added in later phases.
 
 ## Usage
 

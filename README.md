@@ -19,3 +19,5 @@ AI-assisted contract intake and review for public-sector procurement teams. User
 ```
 docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
+
+MySQL is then reachable on `127.0.0.1:3307` (host port 3307, not 3306), which is the default in `DB_URL`.
