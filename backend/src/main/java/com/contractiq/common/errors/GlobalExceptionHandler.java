@@ -1,5 +1,10 @@
 package com.contractiq.common.errors;
 
+import com.contractiq.audit.AuditAction;
+import com.contractiq.audit.AuditOutcome;
+import com.contractiq.audit.AuditService;
+import com.contractiq.auth.TooManyLoginAttemptsException;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +34,12 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private final AuditService audit;
+
+    public GlobalExceptionHandler(AuditService audit) {
+        this.audit = audit;
+    }
 
     /** A field that failed validation; only the field name and rule message, never the value. */
     public record FieldError(String field, String message) {
@@ -71,8 +82,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, "Unauthorized", "Invalid username or password.");
     }
 
+    /** Too many failed logins: 429 with Retry-After. The same answer for any username, real or not. */
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    ResponseEntity<ProblemDetail> handleTooManyLogins(TooManyLoginAttemptsException ex) {
+        ProblemDetail problem = problem(HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests",
+                "Too many failed sign-in attempts. Please try again later.");
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(problem);
+    }
+
     @ExceptionHandler(NotFoundException.class)
-    ProblemDetail handleNotFound(NotFoundException ex) {
+    ProblemDetail handleNotFound(NotFoundException ex, HttpServletRequest request) {
+        if (ex.isAudited()) {
+            // The caller asked for something that is not in their organization (or does not exist).
+            // Whether it exists elsewhere is not recorded or revealed.
+            audit.recordForRequest(AuditAction.RESOURCE_NOT_FOUND, AuditOutcome.NOT_FOUND, request.getRequestURI());
+        }
         return problem(HttpStatus.NOT_FOUND, "Not Found", "The requested resource was not found.");
     }
 
@@ -95,7 +121,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     /** Method-level security (@PreAuthorize) throws this inside the controller layer. */
     @ExceptionHandler(AccessDeniedException.class)
-    ProblemDetail handleAccessDenied(AccessDeniedException ex) {
+    ProblemDetail handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        audit.recordForRequest(AuditAction.ACCESS_DENIED, AuditOutcome.DENIED, request.getRequestURI());
         return problem(HttpStatus.FORBIDDEN, "Forbidden", "You do not have permission to perform this action.");
     }
 

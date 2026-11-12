@@ -13,4 +13,5 @@
     <include file="db/changelog/005-add-contract-analysis-error-code.xml"/>
     <include file="db/changelog/006-create-contract-analyses.xml"/>
     <include file="db/changelog/007-create-ai-usage-log.xml"/>
+    <include file="db/changelog/008-create-audit-log.xml"/>
 </databaseChangeLog>

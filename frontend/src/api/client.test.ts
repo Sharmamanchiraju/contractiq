@@ -66,6 +66,20 @@ describe("request", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it("a 429 on login becomes a 'too many attempts' message and is not an expired session", async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    mockBackend(() => jsonResponse(429, { title: "Too Many Requests" }));
+
+    const error = await failure(login("someone", "pw"));
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).not.toBeInstanceOf(UnauthorizedError);
+    expect(error.status).toBe(429);
+    expect(error.message).toBe("Too many sign-in attempts, try again later.");
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it("turns validation errors into a readable message with the field names", async () => {
     mockBackend(() => jsonResponse(400, { errors: [{ field: "title", message: "must not be blank" }] }));
 

@@ -1,10 +1,12 @@
 package com.contractiq.common.config;
 
+import com.contractiq.audit.AuditService;
 import com.contractiq.common.security.JwtAuthenticationFilter;
 import com.contractiq.common.security.JwtProperties;
 import com.contractiq.common.security.JwtService;
 import com.contractiq.common.security.ProblemAccessDeniedHandler;
 import com.contractiq.common.security.ProblemAuthenticationEntryPoint;
+import com.contractiq.common.security.RequestInfoFilter;
 import com.contractiq.common.security.RequestSizeLimitFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
@@ -22,6 +24,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.session.DisableEncodeUrlFilter;
 import org.springframework.security.web.header.writers.DelegatingRequestMatcherHeaderWriter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
@@ -38,7 +41,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  */
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties({JwtProperties.class, CorsProperties.class, RequestLimitProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, CorsProperties.class, RequestLimitProperties.class,
+        com.contractiq.auth.LoginLimitProperties.class})
 public class SecurityConfig {
 
     private static final String CONTENT_SECURITY_POLICY = "default-src 'none'; frame-ancestors 'none'";
@@ -68,7 +72,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService, ObjectMapper mapper,
-                                            RequestLimitProperties limits,
+                                            RequestLimitProperties limits, AuditService audit,
                                             @Qualifier("corsConfigurationSource") CorsConfigurationSource cors)
             throws Exception {
         // Swagger UI (dev only) needs scripts and styles, so the strict CSP skips its paths.
@@ -92,7 +96,7 @@ public class SecurityConfig {
                                 new StaticHeadersWriter("Content-Security-Policy", CONTENT_SECURITY_POLICY))))
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(new ProblemAuthenticationEntryPoint(mapper))
-                        .accessDeniedHandler(new ProblemAccessDeniedHandler(mapper)))
+                        .accessDeniedHandler(new ProblemAccessDeniedHandler(mapper, audit)))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
@@ -102,7 +106,9 @@ public class SecurityConfig {
                 .addFilterBefore(new RequestSizeLimitFilter(limits.maxRequestBytes(), mapper),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService),
-                        UsernamePasswordAuthenticationFilter.class);
+                        UsernamePasswordAuthenticationFilter.class)
+                // First in the chain, so every answer (even 401, 403 and 413) has a request id.
+                .addFilterBefore(new RequestInfoFilter(), DisableEncodeUrlFilter.class);
         return http.build();
     }
 }

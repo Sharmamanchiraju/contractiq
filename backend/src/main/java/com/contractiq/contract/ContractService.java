@@ -1,5 +1,9 @@
 package com.contractiq.contract;
 
+import com.contractiq.audit.AuditAction;
+import com.contractiq.audit.AuditEntityType;
+import com.contractiq.audit.AuditOutcome;
+import com.contractiq.audit.AuditService;
 import com.contractiq.common.api.PageResponse;
 import com.contractiq.common.errors.NotFoundException;
 import com.contractiq.common.errors.RequestValidationException;
@@ -24,10 +28,12 @@ public class ContractService {
 
     private final ContractRepository contracts;
     private final ReviewRepository reviews;
+    private final AuditService audit;
 
-    public ContractService(ContractRepository contracts, ReviewRepository reviews) {
+    public ContractService(ContractRepository contracts, ReviewRepository reviews, AuditService audit) {
         this.contracts = contracts;
         this.reviews = reviews;
+        this.audit = audit;
     }
 
     /** Stores a new contract in the caller's organization with status UPLOADED. */
@@ -35,7 +41,11 @@ public class ContractService {
     public Contract create(AuthenticatedUser caller, CreateContractRequest request) {
         Contract contract = new Contract(caller.organizationId(), request.title(), request.vendorName(),
                 request.contractText(), caller.userId());
-        return contracts.save(contract);
+        Contract saved = contracts.save(contract);
+        // Same transaction as the contract: no contract without its audit entry. Only ids are recorded.
+        audit.record(AuditAction.CONTRACT_CREATED, AuditOutcome.SUCCESS, caller.organizationId(), caller.userId(),
+                AuditEntityType.CONTRACT, saved.getId());
+        return saved;
     }
 
     /**
@@ -83,6 +93,9 @@ public class ContractService {
         // fails here and no Review row is written.
         Contract saved = contracts.saveAndFlush(contract);
         Review review = reviews.save(new Review(saved.getId(), caller.userId(), request.decision(), comment));
+        // The decision is in the action name, so the comment is never copied into the audit log.
+        audit.record(request.decision() == ReviewDecision.APPROVED ? AuditAction.REVIEW_APPROVED : AuditAction.REVIEW_REJECTED,
+                AuditOutcome.SUCCESS, caller.organizationId(), caller.userId(), AuditEntityType.CONTRACT, saved.getId());
         return ReviewResponse.from(review, saved.getStatus());
     }
 

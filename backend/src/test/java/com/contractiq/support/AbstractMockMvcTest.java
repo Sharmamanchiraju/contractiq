@@ -1,9 +1,11 @@
 package com.contractiq.support;
 
+import com.contractiq.auth.LoginAttemptLimiter;
 import com.contractiq.common.security.JwtService;
 import com.contractiq.user.AppUser;
 import com.contractiq.user.Role;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
@@ -25,6 +27,15 @@ public abstract class AbstractMockMvcTest extends AbstractIntegrationTest {
 
     @Autowired
     protected ObjectMapper json;
+
+    @Autowired
+    private LoginAttemptLimiter loginLimiter;
+
+    /** Many tests fail logins from the same default test address; start each one with a clean limiter. */
+    @BeforeEach
+    void resetLoginLimiter() {
+        loginLimiter.reset();
+    }
 
     @Autowired
     protected JwtService jwtService;

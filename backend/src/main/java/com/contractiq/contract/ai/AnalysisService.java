@@ -1,5 +1,9 @@
 package com.contractiq.contract.ai;
 
+import com.contractiq.audit.AuditAction;
+import com.contractiq.audit.AuditEntityType;
+import com.contractiq.audit.AuditOutcome;
+import com.contractiq.audit.AuditService;
 import com.contractiq.common.errors.NotFoundException;
 import com.contractiq.common.security.AuthenticatedUser;
 import com.contractiq.contract.Contract;
@@ -30,14 +34,16 @@ public class AnalysisService {
     private final AnalysisJobRunner jobRunner;
     private final AiProperties properties;
     private final Clock clock;
+    private final AuditService audit;
 
     public AnalysisService(ContractRepository contracts, AnalysisStore store, AnalysisJobRunner jobRunner,
-                           AiProperties properties, Clock clock) {
+                           AiProperties properties, Clock clock, AuditService audit) {
         this.contracts = contracts;
         this.store = store;
         this.jobRunner = jobRunner;
         this.properties = properties;
         this.clock = clock;
+        this.audit = audit;
     }
 
     /**
@@ -54,6 +60,8 @@ public class AnalysisService {
         Contract saved = contracts.saveAndFlush(contract);
         Long version = saved.getVersion();
         log.info("Analysis started for contract {} (version {})", contractId, version);
+        audit.record(AuditAction.ANALYSIS_STARTED, AuditOutcome.SUCCESS, caller.organizationId(), caller.userId(),
+                AuditEntityType.CONTRACT, contractId);
 
         runAfterCommit(() -> jobRunner.submit(contractId, version));
         return new AnalysisStartedResponse(contractId, saved.getStatus());
@@ -64,7 +72,7 @@ public class AnalysisService {
     public StoredAnalysis getLatest(AuthenticatedUser caller, Long contractId) {
         contracts.findByIdAndOrganizationId(contractId, caller.organizationId())
                 .orElseThrow(() -> new NotFoundException("Contract not found"));
-        return store.findLatest(contractId).orElseThrow(() -> new NotFoundException("Analysis not found"));
+        return store.findLatest(contractId).orElseThrow(() -> new NotFoundException("Analysis not found", false));
     }
 
     private static void runAfterCommit(Runnable action) {

@@ -59,6 +59,24 @@ describe("login flow", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
   });
 
+  it("tells the person to wait when the backend has locked the sign-in (429), and does not call it a wrong password", async () => {
+    mockBackend(on("POST", "/api/v1/auth/login", () =>
+      new Response(JSON.stringify({ status: 429, title: "Too Many Requests" }), {
+        status: 429,
+        headers: { "Content-Type": "application/problem+json", "Retry-After": "600" },
+      })));
+    renderApp("/login");
+
+    await signIn(userEvent.setup(), "someone", "any-password");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("Too many sign-in attempts, try again later.");
+    expect(alert.textContent).not.toMatch(/Invalid username or password/);
+    expect(screen.queryByText(/session has expired/i)).toBeNull();
+    expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("");
+    expect(screen.getByRole("form", { name: "Sign in" })).toBeTruthy();
+  });
+
   it("explains a server that cannot be reached", async () => {
     mockBackend(() => { throw new TypeError("Failed to fetch"); });
     renderApp("/login");

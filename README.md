@@ -177,13 +177,17 @@ Third-party actions are pinned to full commit SHAs, and dependencies are cached.
 
 **What this design does not solve yet:** analysis jobs and the AI circuit breaker live in each instance's memory (a restart loses queued jobs; the stale-analysis timeout is the only repair); login attempts are not rate limited; there is no audit-log table; and sending contract text to an AI provider needs a data-protection review for public-sector use. The MongoDB and S3 parts are not used by the application yet, so they are not part of this design.
 
+## Security
+
+`docs/SECURITY.md` explains in plain words what is protected and how (sign-in, roles, tenant isolation, redaction, the audit log, login rate limiting, secrets handling) and what is **not** done yet. There is no SOC 2 or ISO 27001 certification; the project only follows that mindset.
+
 ## Known limitations
 
 These are deliberate for Phase 1 and should be revisited:
 
 - **JWTs are not checked against the database.** The token is trusted until it expires (30 minutes). A user who is deleted, demoted or has their password changed keeps working access until then. There is no logout, refresh or token revocation.
-- **No audit log.** CLAUDE.md asks for an audit entry on every state-changing action (who, what, when, from where). Phase 1 does not store one yet; only a general application log exists, and it never contains contract text, passwords or tokens.
-- **No login rate limiting or account lockout.** Repeated password guesses are not slowed down, other than by BCrypt's own cost.
+- **The audit log is basic.** Security-relevant events are recorded (see `docs/SECURITY.md`), but the log is not tamper-evident, has no retention policy, and its append-only protection is in the code only; the matching database grants are a documented recommendation.
+- **The login limiter is in memory.** Five failed logins per username or address within 15 minutes gives a 429, but the counts reset when the application restarts and are not shared between instances.
 - **Request size is limited by Content-Length.** Bodies over 1 MiB get 413, and chunked uploads (no declared length) get 411. A contract text near the 200,000-character limit with many escaped characters could exceed 1 MiB and be rejected with 413 before validation.
 - **Contracts cannot be edited or deleted**, and there is no endpoint to read the review history.
 - **Usernames are case-insensitive** (MySQL's default collation), so `Admin` and `admin` are the same user.

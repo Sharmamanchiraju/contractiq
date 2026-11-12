@@ -1,5 +1,9 @@
 package com.contractiq.contract.ai;
 
+import com.contractiq.audit.AuditAction;
+import com.contractiq.audit.AuditEntityType;
+import com.contractiq.audit.AuditOutcome;
+import com.contractiq.audit.AuditService;
 import com.contractiq.contract.Contract;
 import com.contractiq.contract.ContractRepository;
 import com.contractiq.contract.ContractStatus;
@@ -25,10 +29,12 @@ public class AnalysisStateService {
 
     private final ContractRepository contracts;
     private final AnalysisStore store;
+    private final AuditService audit;
 
-    public AnalysisStateService(ContractRepository contracts, AnalysisStore store) {
+    public AnalysisStateService(ContractRepository contracts, AnalysisStore store, AuditService audit) {
         this.contracts = contracts;
         this.store = store;
+        this.audit = audit;
     }
 
     /** Returns the text to analyze, or empty if the job is no longer the current one. */
@@ -53,6 +59,9 @@ public class AnalysisStateService {
         store.save(contractId, result, provider);
         contract.completeAnalysis();
         contracts.saveAndFlush(contract);
+        // No user: the job acts on its own. Same transaction as the status change.
+        audit.record(AuditAction.ANALYSIS_FINISHED, AuditOutcome.SUCCESS, contract.getOrganizationId(), null,
+                AuditEntityType.CONTRACT, contractId);
         return true;
     }
 
@@ -70,6 +79,8 @@ public class AnalysisStateService {
         }
         contract.failAnalysis(code.name());
         contracts.saveAndFlush(contract);
+        audit.record(AuditAction.ANALYSIS_FINISHED, AuditOutcome.FAILURE, contract.getOrganizationId(), null,
+                AuditEntityType.CONTRACT, contractId);
         return true;
     }
 

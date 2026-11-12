@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!--
+      Append-only record of security-relevant events. Rows are only ever inserted: the application has
+      no update or delete code for this table. Every column is short and fixed-purpose on purpose:
+      there is nowhere to put a password, a token, contract text or a comment.
+      No foreign keys, so the history survives deleted users and organizations.
+    -->
+    <changeSet id="008-create-audit-log" author="contractiq">
+        <createTable tableName="audit_log">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="occurred_at" type="DATETIME(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="organization_id" type="BIGINT"/>
+            <column name="user_id" type="BIGINT"/>
+            <column name="action" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_type" type="VARCHAR(40)"/>
+            <column name="entity_id" type="BIGINT"/>
+            <column name="outcome" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_id" type="VARCHAR(64)"/>
+            <column name="ip_address" type="VARCHAR(45)"/>
+        </createTable>
+        <createIndex tableName="audit_log" indexName="idx_audit_log_org_id">
+            <column name="organization_id"/>
+            <column name="id"/>
+        </createIndex>
+        <createIndex tableName="audit_log" indexName="idx_audit_log_occurred_at">
+            <column name="occurred_at"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

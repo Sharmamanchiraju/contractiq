@@ -22,6 +22,11 @@ spring:
     # We authenticate with our own JWT filter; skip Boot's generated default user and password.
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
 
+logging:
+  pattern:
+    # Adds the request id to every log line, to match a log line with an audit entry.
+    level: "%5p [%X{requestId:-}]"
+
 server:
   error:
     include-message: never
@@ -53,6 +58,13 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   limits:
     max-request-bytes: 1048576
+  security:
+    login:
+      # Failed logins allowed per username and per network address within the window, then HTTP 429.
+      # In memory only: resets on restart and is not shared between instances (see docs/SECURITY.md).
+      max-failures: 5
+      window: 15m
+      max-tracked-keys: 10000
   ai:
     # mock = rule-based analyzer, no network and no key needed. claude = the real API.
     provider: ${AI_PROVIDER:mock}
