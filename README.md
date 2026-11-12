@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Sharmamanchiraju/contractiq/actions/workflows/ci.yml/badge.svg)](https://github.com/Sharmamanchiraju/contractiq/actions/workflows/ci.yml)
 
-AI-assisted contract intake and review for public-sector procurement teams. Users upload contracts; Claude extracts structured terms and risk flags; a human reviewer approves or rejects; the system warns before contracts expire. This repository is currently at Phase 2: the Spring Boot backend (login, contracts, human review) plus asynchronous AI analysis. There is no MongoDB, S3 or UI yet.
+AI-assisted contract intake and review for public-sector procurement teams. Users upload contracts; Claude extracts structured terms and risk flags; a human reviewer approves or rejects; the system warns before contracts expire. The repository currently contains: the Spring Boot backend (login with rate limiting, contracts, human review, asynchronous AI analysis, an audit log), a React web UI, a Python MCP server for AI assistants, and Docker and CI setup. There is no MongoDB or S3 yet.
 
 ## Repository layout
 
@@ -76,11 +76,20 @@ RTOKEN=$(curl -s -X POST $BASE/api/v1/auth/login -H 'Content-Type: application/j
   -d "{\"username\":\"reviewer\",\"password\":\"$SEED_REVIEWER_PASSWORD\"}" | jq -r .token)
 curl -s -X POST $BASE/api/v1/contracts/1/review -H "Authorization: Bearer $RTOKEN" \
   -H 'Content-Type: application/json' -d '{"decision":"REJECTED","comment":"Unlimited liability clause."}'
+
+# 6. Read the audit log (ADMIN only, your own organization only, newest first, at most 100 per page).
+ATOKEN=$(curl -s -X POST $BASE/api/v1/auth/login -H 'Content-Type: application/json' \
+  -d "{\"username\":\"admin\",\"password\":\"$SEED_ADMIN_PASSWORD\"}" | jq -r .token)
+curl -s "$BASE/api/v1/audit?page=0&size=20" -H "Authorization: Bearer $ATOKEN"
 ```
 
 The curl examples use `$SEED_UPLOADER_PASSWORD` and `$SEED_REVIEWER_PASSWORD`. Run them in a bash shell after `set -a; source .env; set +a`, or paste your own passwords. A new contract starts as UPLOADED. A review needs the status ANALYZED or NEEDS_MANUAL_REVIEW, which the analysis flow below produces.
 
 Errors use RFC 7807 Problem Details: 400 validation, 401 not logged in, 403 wrong role, 404 not found (or not yours), 409 invalid status move or concurrent change.
+
+**Login rate limit.** After 5 failed logins within 15 minutes, a username (and separately a network address) gets `429 Too Many Requests` with a `Retry-After` header (seconds), even if the next password is right. The answer is the same for usernames that exist and ones that do not. The counters are in memory, so they reset when the backend restarts and are not shared between instances.
+
+**Audit log and request ids.** Logins, contract creation, analysis start and finish, review decisions, refused actions (403) and lookups of contracts outside your organization (404) are recorded in an append-only table with ids only, never passwords, tokens, contract text or comments. `GET /api/v1/audit` (ADMIN, own organization only) reads it. Every response carries an `X-Request-Id` header that also appears in the backend's log lines and in audit entries. Details and limits are in [docs/SECURITY.md](docs/SECURITY.md).
 
 ### Run the tests
 
