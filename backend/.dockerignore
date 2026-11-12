@@ -1,0 +1,12 @@
+# Keep the build context small and keep secrets and local files out of the image.
+target/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+*.log
+.env
+.env.*
+Dockerfile
+.dockerignore

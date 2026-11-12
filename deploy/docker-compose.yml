@@ -1,6 +1,8 @@
-# ContractIQ local data stores (MySQL 8 + MongoDB 7).
+# ContractIQ local data stores (MySQL 8 + MongoDB 7), plus the backend as an OPTIONAL service.
 # Run from the repo root (the .env file lives in the repo root):
 #   docker compose --env-file .env -f deploy/docker-compose.yml up -d
+# That starts only MySQL and MongoDB, exactly as before. To also run the backend in a container:
+#   docker compose --env-file .env -f deploy/docker-compose.yml --profile app up -d --build
 
 services:
   mysql:
@@ -41,6 +43,42 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  # The backend API. Only started with `--profile app`, so the setup above is unchanged without it.
+  backend:
+    profiles: ["app"]
+    build:
+      context: ../backend
+    image: contractiq-backend:local
+    container_name: contractiq-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # Inside the compose network MySQL is "mysql" on port 3306 (3307 is only the host-side mapping).
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?MYSQL_DATABASE is required}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (at least 32 bytes)}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      # The rule-based mock analyzer: needs no key. To use the real Claude API instead, set
+      # AI_PROVIDER=claude in .env and add these two lines here (the key is deliberately NOT passed
+      # to the container by default, so it does not appear in `docker inspect` when unused):
+      #   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required for claude}
+      #   CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-5-5}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+    ports:
+      - "127.0.0.1:8080:8080"
+    # Hardening: no write access to the image, no Linux capabilities, no privilege escalation.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # The healthcheck is defined in the image (backend/Dockerfile).
 
 volumes:
   mysql_data:

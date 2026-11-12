@@ -1,5 +1,7 @@
 # ContractIQ
 
+[![CI](https://github.com/Sharmamanchiraju/contractiq/actions/workflows/ci.yml/badge.svg)](https://github.com/Sharmamanchiraju/contractiq/actions/workflows/ci.yml)
+
 AI-assisted contract intake and review for public-sector procurement teams. Users upload contracts; Claude extracts structured terms and risk flags; a human reviewer approves or rejects; the system warns before contracts expire. This repository is currently at Phase 2: the Spring Boot backend (login, contracts, human review) plus asynchronous AI analysis. There is no MongoDB, S3 or UI yet.
 
 ## Repository layout
@@ -21,6 +23,16 @@ docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
 
 MySQL is then reachable on `127.0.0.1:3307` (host port 3307, not 3306), which is the default in `DB_URL`.
+
+### Running the backend in a container (optional)
+
+The backend can also run as a container next to the databases. It is behind a compose *profile*, so the command above is unchanged and still starts only MySQL and MongoDB:
+
+```
+docker compose --env-file .env -f deploy/docker-compose.yml --profile app up -d --build
+```
+
+The image is built from `backend/Dockerfile` (Maven build, then a slim Java 21 runtime, running as a non-root user, with no secrets inside). Its settings come from `.env` when it starts, it uses the mock analyzer unless you opt in to Claude (see the comments in the compose file), and it listens on `127.0.0.1:8080` only. This is for local use; see the deployment design below for how it would run elsewhere.
 
 ## Backend (Phase 1)
 
@@ -139,6 +151,31 @@ Protection around each call (all settings under `app.ai.claude.*`):
 SELECT contract_id, model, input_tokens, output_tokens, latency_ms, request_id, outcome, created_at
 FROM ai_usage_log ORDER BY id DESC LIMIT 20;
 ```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request, with read-only access to the repository and no secrets:
+
+- **Backend:** `mvn -B verify` on JDK 21, including the Testcontainers integration tests.
+- **Frontend:** `npm ci`, type check, tests and production build on Node 20.
+- **MCP server:** `pip install` of the pinned requirements and `pytest` on Python 3.12.
+- **Docker:** builds the backend image to prove the Dockerfile works (nothing is pushed).
+
+Third-party actions are pinned to full commit SHAs, and dependencies are cached. **Status: the workflow has been linted with `actionlint` and its commands have been run locally, but it has not run on GitHub yet.** The badge at the top shows "no status" until its first run.
+
+## Deploying to AWS or Azure (a design, not a deployment)
+
+**Nothing here has been deployed or tried on AWS or Azure.** It describes how the pieces built so far would run there. There is no deploy step in CI and no Terraform or Bicep yet.
+
+- **Container.** CI would build the backend image from `backend/Dockerfile` and push it to a private registry (Amazon ECR or Azure Container Registry), signing in with short-lived OIDC credentials rather than stored keys. The image holds no keys, passwords or `.env`: everything arrives as environment variables when the container starts.
+- **Where it runs.** On AWS, an ECS service on Fargate behind an Application Load Balancer; on Azure, Azure Container Apps with HTTPS ingress. Either one probes `/actuator/health`, terminates TLS in front of the app (the app speaks plain HTTP on 8080), and runs at least one instance. The app calls no cloud API, so its cloud role needs no permissions beyond pulling the image and reading its own secrets.
+- **Database.** A managed MySQL 8 (Amazon RDS for MySQL or Azure Database for MySQL Flexible Server) in private subnets with no public access, TLS to the database, and automated backups. Network rules allow only the app to reach port 3306. Liquibase currently runs at startup with the app's own database user, so that user needs schema rights; a stricter design would run migrations as a separate step with a privileged user and give the running app a data-only user.
+- **Secrets.** The database password, the JWT secret and, if the real AI is used, the Anthropic key live in AWS Secrets Manager or Azure Key Vault and are injected at start (ECS `secrets` entries; Container Apps secrets backed by Key Vault through a managed identity). They are never in the image, in git, in compose files or in logs.
+- **Settings the container needs:** `DB_URL`, `MYSQL_USER`, `MYSQL_PASSWORD`, `JWT_SECRET` (at least 32 bytes), `CORS_ALLOWED_ORIGINS` (the exact web address of the UI), and optionally `AI_PROVIDER`, `ANTHROPIC_API_KEY`, `CLAUDE_MODEL`. The app refuses to start without the required ones.
+- **Web UI.** `npm run build` makes static files that could be served from S3 with CloudFront or from Azure Static Web Apps. The API address is fixed at build time (`VITE_API_BASE_URL`) and must match the backend's CORS setting exactly.
+- **Logs.** The container writes to standard output, collected by CloudWatch Logs or Log Analytics. The application already avoids logging contract text, tokens and passwords.
+
+**What this design does not solve yet:** analysis jobs and the AI circuit breaker live in each instance's memory (a restart loses queued jobs; the stale-analysis timeout is the only repair); login attempts are not rate limited; there is no audit-log table; and sending contract text to an AI provider needs a data-protection review for public-sector use. The MongoDB and S3 parts are not used by the application yet, so they are not part of this design.
 
 ## Known limitations
 
