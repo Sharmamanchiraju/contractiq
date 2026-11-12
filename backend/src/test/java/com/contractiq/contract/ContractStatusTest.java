@@ -61,6 +61,15 @@ class ContractStatusTest {
     }
 
     @Test
+    void analyzingCanOnlyMoveToAnalyzedOrNeedsManualReview() {
+        // The analysis job only ever moves a contract out of ANALYZING, so it can never decide it.
+        for (ContractStatus target : ContractStatus.values()) {
+            boolean expected = target == ANALYZED || target == NEEDS_MANUAL_REVIEW;
+            assertThat(ANALYZING.canMoveTo(target)).as("ANALYZING -> " + target).isEqualTo(expected);
+        }
+    }
+
+    @Test
     void approvedAndRejectedAreTerminal() {
         for (ContractStatus target : ContractStatus.values()) {
             assertThat(APPROVED.canMoveTo(target)).isFalse();

@@ -10,4 +10,7 @@
     <include file="db/changelog/002-create-app-users.xml"/>
     <include file="db/changelog/003-create-contracts.xml"/>
     <include file="db/changelog/004-create-reviews.xml"/>
+    <include file="db/changelog/005-add-contract-analysis-error-code.xml"/>
+    <include file="db/changelog/006-create-contract-analyses.xml"/>
+    <include file="db/changelog/007-create-ai-usage-log.xml"/>
 </databaseChangeLog>

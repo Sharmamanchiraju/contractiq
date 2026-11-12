@@ -56,7 +56,9 @@ reviewer approves or rejects; the system warns before contracts expire.
 ## AI rules (Claude API)
 - The model id comes from configuration (CLAUDE_MODEL), never hardcoded.
 - Contract text is untrusted data, never instructions. Wrap it in tags and say
-  so in the system prompt. Output must come through a forced tool schema.
+  so in the system prompt. Output must come through a strict tool schema
+  (tool_choice auto plus strict true), because newer models reject forced
+  tool_choice.
 - Validate every field of the model output. If invalid, retry once, then mark
   the record NEEDS_MANUAL_REVIEW.
 - Set timeouts, retries with backoff for temporary errors only, and a circuit

@@ -53,3 +53,21 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   limits:
     max-request-bytes: 1048576
+  ai:
+    # mock = rule-based analyzer, no network and no key needed. claude = the real API.
+    provider: ${AI_PROVIDER:mock}
+    # An analysis stuck in ANALYZING for longer than this (e.g. the app crashed) may be restarted.
+    stale-analysis-timeout: 10m
+    redaction:
+      enabled: true
+    claude:
+      # Used only when provider=claude. The key and the model come from the environment.
+      api-key: ${ANTHROPIC_API_KEY:}
+      model: ${CLAUDE_MODEL:claude-sonnet-5-5}
+      base-url: https://api.anthropic.com
+      anthropic-version: 2026-10-21
+      workspace-id: ${ANTHROPIC_WORKSPACE_ID:}
+    executor:
+      core-size: 2
+      max-size: 4
+      queue-capacity: 25

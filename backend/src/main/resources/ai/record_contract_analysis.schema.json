@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "properties": {
+    "parties": { "type": "array", "items": { "type": "string" } },
+    "effectiveDate": { "type": ["string", "null"] },
+    "expiryDate": { "type": ["string", "null"] },
+    "renewalTerms": { "type": ["string", "null"] },
+    "paymentTerms": { "type": ["string", "null"] },
+    "obligations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "party": { "type": ["string", "null"] },
+          "dueDate": { "type": ["string", "null"] }
+        },
+        "required": ["description", "party", "dueDate"],
+        "additionalProperties": false
+      }
+    },
+    "riskFlags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "clause": { "type": "string" },
+          "severity": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+          "reason": { "type": "string" },
+          "quote": { "type": "string" }
+        },
+        "required": ["clause", "severity", "reason", "quote"],
+        "additionalProperties": false
+      }
+    },
+    "summary": { "type": "string" }
+  },
+  "required": ["parties", "effectiveDate", "expiryDate", "renewalTerms", "paymentTerms", "obligations", "riskFlags", "summary"],
+  "additionalProperties": false
+}

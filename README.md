@@ -1,6 +1,6 @@
 # ContractIQ
 
-AI-assisted contract intake and review for public-sector procurement teams. Users upload contracts; Claude extracts structured terms and risk flags; a human reviewer approves or rejects; the system warns before contracts expire. This repository is currently at Phase 1: the Spring Boot backend core (login, contracts, human review). There is no AI analysis, MongoDB, S3 or UI yet.
+AI-assisted contract intake and review for public-sector procurement teams. Users upload contracts; Claude extracts structured terms and risk flags; a human reviewer approves or rejects; the system warns before contracts expire. This repository is currently at Phase 2: the Spring Boot backend (login, contracts, human review) plus asynchronous AI analysis. There is no MongoDB, S3 or UI yet.
 
 ## Repository layout
 
@@ -28,11 +28,10 @@ Requires JDK 21, Maven 3.9+ and Docker (the tests start their own MySQL with Tes
 
 ### Run it
 
-Load `.env` into your shell first, so the app can read `JWT_SECRET`, the database settings and the demo-user passwords. Run this from the repo root, in the same shell you start the app from:
+The app reads `JWT_SECRET`, the database settings and the demo-user passwords from environment variables, so `.env` must be loaded into the process. Run this from the repo root. It works from any shell, including fish, because the loading happens inside `bash`:
 
 ```
-set -a; source .env; set +a
-cd backend && mvn spring-boot:run -Dspring-boot.run.profiles=dev
+bash -c 'set -a; source .env; set +a; cd backend && mvn spring-boot:run -Dspring-boot.run.profiles=dev'
 ```
 
 The `dev` profile turns on the demo-user seeder and Swagger UI (`http://localhost:8080/swagger-ui.html`). Without the `dev` profile, neither is available, and the app refuses to start if `JWT_SECRET` is missing or shorter than 32 bytes.
@@ -67,7 +66,7 @@ curl -s -X POST $BASE/api/v1/contracts/1/review -H "Authorization: Bearer $RTOKE
   -H 'Content-Type: application/json' -d '{"decision":"REJECTED","comment":"Unlimited liability clause."}'
 ```
 
-`SEED_*` must be exported in your shell for the curl examples (`set -a; source .env; set +a` does this). A new contract starts as UPLOADED. Nothing moves it to ANALYZED until the AI analysis exists (a later phase), so for now a review returns 409 unless you set the status yourself, as the tests do.
+The curl examples use `$SEED_UPLOADER_PASSWORD` and `$SEED_REVIEWER_PASSWORD`. Run them in a bash shell after `set -a; source .env; set +a`, or paste your own passwords. A new contract starts as UPLOADED. A review needs the status ANALYZED or NEEDS_MANUAL_REVIEW, which the analysis flow below produces.
 
 Errors use RFC 7807 Problem Details: 400 validation, 401 not logged in, 403 wrong role, 404 not found (or not yours), 409 invalid status move or concurrent change.
 
@@ -75,6 +74,70 @@ Errors use RFC 7807 Problem Details: 400 validation, 401 not logged in, 403 wron
 
 ```
 cd backend && mvn -B verify
+```
+
+## AI analysis (Phase 2)
+
+An analysis reads a contract and produces a **draft** for a human: parties, dates, renewal and payment terms, obligations, and risk flags that each quote the contract word for word. It can never approve or reject: the result type has no status or decision field, the job can only move a contract to ANALYZED or NEEDS_MANUAL_REVIEW, and only a REVIEWER or ADMIN can call the review endpoint.
+
+Provider: `app.ai.provider` (environment variable `AI_PROVIDER`). The default, `mock`, is a simple rule-based analyzer that needs no network and no API key. Everything below works with it.
+
+### The flow
+
+1. `POST /api/v1/contracts/{id}/analyze` (any role) returns **202** at once. The contract moves to `ANALYZING` in a short transaction. This is allowed from `UPLOADED`, `ANALYZED` and `NEEDS_MANUAL_REVIEW`; from `APPROVED`/`REJECTED` it is 409, and while another analysis is running it is 409.
+2. Only after that transaction has committed, the job is queued on a bounded thread pool (`app.ai.executor.*`). If the pool and queue are full, the contract ends as `NEEDS_MANUAL_REVIEW` with code `ANALYSIS_UNAVAILABLE`.
+3. The job redacts personal data from the text (`app.ai.redaction.enabled`, on by default), asks the analyzer, and validates every field. Each risk-flag quote must appear word for word in the **redacted** text that was sent (whitespace ignored). If the output is invalid, it retries once with the problems listed. No database transaction is open while the analyzer runs.
+4. On success, the analysis is stored as the next version (1, 2, ...) and the contract becomes `ANALYZED`, in one transaction. On failure it becomes `NEEDS_MANUAL_REVIEW` and `analysisErrorCode` holds a safe code: `ANALYSIS_INVALID_OUTPUT`, `ANALYSIS_PROVIDER_ERROR`, `ANALYSIS_TIMEOUT`, `ANALYSIS_TOO_LARGE`, `ANALYSIS_UNAVAILABLE` or `ANALYSIS_INTERNAL_ERROR`. Provider messages are never stored or returned.
+5. `GET /api/v1/contracts/{id}/analysis` returns the newest analysis, only for the caller's own organization (404 otherwise, and 404 if there is none yet). Poll the contract's `status`, or this endpoint, to see the outcome.
+
+### Crash recovery
+
+If the app dies mid-analysis, the contract would stay `ANALYZING`. After `app.ai.stale-analysis-timeout` (default 10 minutes) without a change, `analyze` is allowed again and restarts the analysis. An old job that is only slow, not dead, cannot overwrite the newer result: every job remembers the contract version it started with and writes nothing if that has changed.
+
+### Try it (mock provider)
+
+```
+BASE=http://localhost:8080
+TOKEN=$(curl -s -X POST $BASE/api/v1/auth/login -H 'Content-Type: application/json' \
+  -d "{\"username\":\"uploader\",\"password\":\"$SEED_UPLOADER_PASSWORD\"}" | jq -r .token)
+
+# Upload a contract, then start the analysis (202).
+curl -s -X POST $BASE/api/v1/contracts -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title":"Supplies","vendorName":"Acme Ltd","contractText":"This agreement is between Acme Ltd and City Council, effective 2026-01-01. The vendor accepts unlimited liability for late delivery."}'
+curl -s -i -X POST $BASE/api/v1/contracts/1/analyze -H "Authorization: Bearer $TOKEN"
+
+# A moment later: status is ANALYZED and the analysis is available.
+curl -s $BASE/api/v1/contracts/1 -H "Authorization: Bearer $TOKEN" | jq '{status, analysisErrorCode}'
+curl -s $BASE/api/v1/contracts/1/analysis -H "Authorization: Bearer $TOKEN" | jq
+```
+
+### Using the real Claude API
+
+Switch the provider and give the app your key. The app refuses to start with `AI_PROVIDER=claude` and no `ANTHROPIC_API_KEY`, instead of quietly using the mock. `.env` needs `ANTHROPIC_API_KEY`, and optionally `CLAUDE_MODEL` (default `claude-sonnet-5-5`) and `ANTHROPIC_WORKSPACE_ID`:
+
+```
+bash -c 'set -a; source .env; set +a; export AI_PROVIDER=claude; cd backend && mvn spring-boot:run -Dspring-boot.run.profiles=dev'
+```
+
+Then upload and analyze a contract exactly as in the mock example. **This sends the redacted contract text to Anthropic and costs tokens.** Use a non-sensitive test contract first.
+
+How the request is built:
+- `POST {base-url}/v1/messages` with headers `x-api-key`, `anthropic-version` (default `2026-10-21`, from `app.ai.claude.anthropic-version`) and, if set, `anthropic-workspace-id`.
+- One tool, `record_contract_analysis`, with `strict: true` and `additionalProperties: false` on every object (schema in `backend/src/main/resources/ai/record_contract_analysis.schema.json`), and `tool_choice: auto`. Current models reject a forced tool choice with a 400, so the system prompt tells the model to call the tool exactly once. An answer with no tool call, more than one, or a `stop_reason` other than `tool_use` counts as invalid output (retried once with the problems listed, then `ANALYSIS_INVALID_OUTPUT`).
+- No `temperature`, `top_p`, prefill or thinking parameter is sent. The contract goes inside `<contract>` tags and the prompt says it is untrusted data. A closing tag inside the text is neutralized so the contract cannot escape the tags.
+
+Protection around each call (all settings under `app.ai.claude.*`):
+- **Timeouts:** 5 s to connect, 60 s to read. **Input guard:** text over 400,000 characters (after redaction) is refused without a call (`ANALYSIS_TOO_LARGE`).
+- **Retry** (3 attempts, exponential backoff 1 s, 2 s, ... capped at 10 s, honoring `retry-after`): only HTTP 429, any 5xx including 529, and timeouts. Never other 4xx (400, 401, 402, 403, 404, 413), never a spend-limit 429, and never when `retry-after` is over 30 s. Connection failures (refused, DNS) are not retried.
+- **Circuit breaker:** opens after 50% failures over the last 10 calls (at least 5), counting only provider trouble (429, 5xx, timeouts, unreachable). While open, analyses fail at once as `ANALYSIS_UNAVAILABLE` for 30 s.
+- **Bulkhead:** at most 4 calls at once; more are refused as `ANALYSIS_UNAVAILABLE`.
+- Final failures map to safe codes: timeout is `ANALYSIS_TIMEOUT`; 413 is `ANALYSIS_TOO_LARGE`; 429, 5xx, circuit open, bulkhead full and unreachable are `ANALYSIS_UNAVAILABLE`; other 4xx is `ANALYSIS_PROVIDER_ERROR`.
+
+**Usage log.** Every call attempt writes one row to `ai_usage_log`: contract id, model, input and output tokens, latency in ms, the provider's `request-id`, and an outcome (`OK`, `INVALID_OUTPUT`, `HTTP_429`, `TIMEOUT`, `CIRCUIT_OPEN`, ...). It never holds prompts, contract text, answers or provider messages. Micrometer also records `contractiq.ai.calls` (tagged by outcome) and `contractiq.ai.call.duration`; they are not exposed over HTTP because only `/actuator/health` and `/actuator/info` are.
+
+```
+SELECT contract_id, model, input_tokens, output_tokens, latency_ms, request_id, outcome, created_at
+FROM ai_usage_log ORDER BY id DESC LIMIT 20;
 ```
 
 ## Known limitations
@@ -87,6 +150,11 @@ These are deliberate for Phase 1 and should be revisited:
 - **Request size is limited by Content-Length.** Bodies over 1 MiB get 413, and chunked uploads (no declared length) get 411. A contract text near the 200,000-character limit with many escaped characters could exceed 1 MiB and be rejected with 413 before validation.
 - **Contracts cannot be edited or deleted**, and there is no endpoint to read the review history.
 - **Usernames are case-insensitive** (MySQL's default collation), so `Admin` and `admin` are the same user.
-- **Status moves to ANALYZING/ANALYZED/NEEDS_MANUAL_REVIEW exist in the rules but nothing triggers them yet.** They arrive with the AI analysis phase.
+- **The real Claude client has not been run against the live API yet.** It is tested against a stubbed server (WireMock) only. In particular, the strict tool schema expresses optional fields as `"type": ["string", "null"]`; the Claude docs did not confirm that form (versus `anyOf`), so the first real call could be rejected with a 400, which would show as `ANALYSIS_PROVIDER_ERROR`. The schema is a plain JSON file, so it is a one-line fix.
+- **The mock analyzer is weak.** It finds facts with keyword rules, so its output is far weaker than a model's.
+- **The circuit breaker is per application instance.** It trips on a burst of provider failures and then fails analyses fast for 30 seconds; affected contracts end as NEEDS_MANUAL_REVIEW and must be analyzed again.
+- **Contract text leaves the system when the provider is `claude`**, after regex redaction (see `Redactor` for its limits). Names and addresses are sent as written.
+- **Redaction is regular-expression based.** It does not mask names or addresses, and it can mask harmless long numbers. See the comments on `Redactor` for the exact limits.
+- **Analysis jobs live in memory.** A queued job is lost if the app stops; the stale-timeout recovery above is the only repair, and it needs someone to call `analyze` again.
 - **CORS** allows only GET, POST and OPTIONS from the origins in `CORS_ALLOWED_ORIGINS` (default `http://localhost:5173`).
 - **Dev seeder and Swagger** are for local development only. Never run the `dev` profile in production.

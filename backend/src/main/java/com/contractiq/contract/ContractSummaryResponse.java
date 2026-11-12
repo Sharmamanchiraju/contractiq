@@ -11,6 +11,7 @@ public record ContractSummaryResponse(
         String title,
         String vendorName,
         ContractStatus status,
+        String analysisErrorCode,
         Long createdBy,
         Instant createdAt,
         Instant updatedAt,
@@ -19,6 +20,7 @@ public record ContractSummaryResponse(
     public static ContractSummaryResponse from(Contract contract) {
         return new ContractSummaryResponse(
                 contract.getId(), contract.getTitle(), contract.getVendorName(), contract.getStatus(),
-                contract.getCreatedBy(), contract.getCreatedAt(), contract.getUpdatedAt(), contract.getVersion());
+                contract.getAnalysisErrorCode(), contract.getCreatedBy(), contract.getCreatedAt(),
+                contract.getUpdatedAt(), contract.getVersion());
     }
 }

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- One row per AI call attempt. Never holds prompts, contract text or provider messages. -->
+    <changeSet id="007-create-ai-usage-log" author="contractiq">
+        <createTable tableName="ai_usage_log">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="contract_id" type="BIGINT"/>
+            <column name="model" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="input_tokens" type="INT"/>
+            <column name="output_tokens" type="INT"/>
+            <column name="latency_ms" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_id" type="VARCHAR(100)"/>
+            <column name="outcome" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME(6)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="ai_usage_log" indexName="idx_ai_usage_log_contract_id">
+            <column name="contract_id"/>
+        </createIndex>
+        <createIndex tableName="ai_usage_log" indexName="idx_ai_usage_log_created_at">
+            <column name="created_at"/>
+        </createIndex>
+        <addForeignKeyConstraint baseTableName="ai_usage_log" baseColumnNames="contract_id"
+                                 constraintName="fk_ai_usage_log_contract"
+                                 referencedTableName="contracts" referencedColumnNames="id"/>
+    </changeSet>
+</databaseChangeLog>

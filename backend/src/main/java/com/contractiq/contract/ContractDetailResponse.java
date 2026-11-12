@@ -10,6 +10,7 @@ public record ContractDetailResponse(
         String title,
         String vendorName,
         ContractStatus status,
+        String analysisErrorCode,
         String contractText,
         Long createdBy,
         Instant createdAt,
@@ -19,7 +20,7 @@ public record ContractDetailResponse(
     public static ContractDetailResponse from(Contract contract) {
         return new ContractDetailResponse(
                 contract.getId(), contract.getTitle(), contract.getVendorName(), contract.getStatus(),
-                contract.getContractText(), contract.getCreatedBy(), contract.getCreatedAt(),
-                contract.getUpdatedAt(), contract.getVersion());
+                contract.getAnalysisErrorCode(), contract.getContractText(), contract.getCreatedBy(),
+                contract.getCreatedAt(), contract.getUpdatedAt(), contract.getVersion());
     }
 }

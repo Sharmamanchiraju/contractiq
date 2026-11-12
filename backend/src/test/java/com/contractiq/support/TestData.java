@@ -48,8 +48,13 @@ public class TestData {
 
     /** Saves a contract and walks it through the real transitions until it reaches {@code status}. */
     public Contract contract(Organization organization, AppUser creator, ContractStatus status) {
+        return contract(organization, creator, status, "Contract text for tests.");
+    }
+
+    /** Same, with the given contract text. */
+    public Contract contract(Organization organization, AppUser creator, ContractStatus status, String text) {
         Contract contract = new Contract(organization.getId(), "Title " + UUID.randomUUID(), "Vendor",
-                "Contract text for tests.", creator.getId());
+                text, creator.getId());
         for (ContractStatus step : pathTo(status)) {
             contract.moveTo(step);
         }
