@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <changeSet id="002-create-app-users" author="contractiq">
+        <createTable tableName="app_users">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="organization_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="username" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_app_users_username"/>
+            </column>
+            <column name="email" type="VARCHAR(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="password_hash" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="app_users" indexName="idx_app_users_organization_id">
+            <column name="organization_id"/>
+        </createIndex>
+        <addForeignKeyConstraint baseTableName="app_users" baseColumnNames="organization_id"
+                                 constraintName="fk_app_users_organization"
+                                 referencedTableName="organizations" referencedColumnNames="id"/>
+    </changeSet>
+</databaseChangeLog>

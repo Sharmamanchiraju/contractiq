@@ -1,0 +1,15 @@
+# Development profile. Activate with SPRING_PROFILES_ACTIVE=dev (or -Dspring-boot.run.profiles=dev).
+# Never use in production: it enables Swagger UI and the demo-user seeder.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+app:
+  seed:
+    # Demo-user passwords come from the environment, never from code. A user whose variable is
+    # empty is not created.
+    uploader-password: ${SEED_UPLOADER_PASSWORD:}
+    reviewer-password: ${SEED_REVIEWER_PASSWORD:}
+    admin-password: ${SEED_ADMIN_PASSWORD:}

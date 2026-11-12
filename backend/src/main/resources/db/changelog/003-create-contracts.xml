@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <changeSet id="003-create-contracts" author="contractiq">
+        <createTable tableName="contracts">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="organization_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="VARCHAR(300)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="vendor_name" type="VARCHAR(300)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="contract_text" type="LONGTEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="contracts" indexName="idx_contracts_organization_id">
+            <column name="organization_id"/>
+        </createIndex>
+        <createIndex tableName="contracts" indexName="idx_contracts_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="contracts" indexName="idx_contracts_created_at">
+            <column name="created_at"/>
+        </createIndex>
+        <addForeignKeyConstraint baseTableName="contracts" baseColumnNames="organization_id"
+                                 constraintName="fk_contracts_organization"
+                                 referencedTableName="organizations" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="contracts" baseColumnNames="created_by"
+                                 constraintName="fk_contracts_created_by"
+                                 referencedTableName="app_users" referencedColumnNames="id"/>
+    </changeSet>
+</databaseChangeLog>

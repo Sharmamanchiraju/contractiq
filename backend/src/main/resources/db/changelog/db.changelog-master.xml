@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Never edit an applied changeSet; add a new file instead. -->
+    <include file="db/changelog/001-create-organizations.xml"/>
+    <include file="db/changelog/002-create-app-users.xml"/>
+    <include file="db/changelog/003-create-contracts.xml"/>
+    <include file="db/changelog/004-create-reviews.xml"/>
+</databaseChangeLog>
