@@ -60,6 +60,11 @@ public class JwtService {
         return bytes;
     }
 
+    /** How long a newly issued token stays valid, in seconds. */
+    public long expirySeconds() {
+        return expiry.toSeconds();
+    }
+
     /**
      * Issues a signed token carrying the user id (subject), organization id and role.
      */

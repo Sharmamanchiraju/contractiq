@@ -12,6 +12,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -72,14 +73,19 @@ public class Contract {
 
     @PrePersist
     void onCreate() {
-        Instant now = Instant.now();
+        Instant now = now();
         this.createdAt = now;
         this.updatedAt = now;
     }
 
     @PreUpdate
     void onUpdate() {
-        this.updatedAt = Instant.now();
+        this.updatedAt = now();
+    }
+
+    /** The current time cut to microseconds, the precision of the DATETIME(6) columns. */
+    private static Instant now() {
+        return Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     public Long getId() {

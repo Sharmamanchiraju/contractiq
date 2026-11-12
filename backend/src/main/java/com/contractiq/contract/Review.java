@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -54,7 +55,8 @@ public class Review {
 
     @PrePersist
     void onCreate() {
-        this.createdAt = Instant.now();
+        // Microseconds, the precision of the DATETIME(6) column, so the response matches what is stored.
+        this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     public Long getId() {

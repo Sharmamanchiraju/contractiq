@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -57,6 +58,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .map(v -> new FieldError(v.getPropertyPath().toString(), v.getMessage()))
                 .toList();
         return validationProblem(errors);
+    }
+
+    @ExceptionHandler(RequestValidationException.class)
+    ProblemDetail handleRequestValidation(RequestValidationException ex) {
+        return validationProblem(List.of(new FieldError(ex.getField(), ex.getMessage())));
+    }
+
+    /** Failed login. One generic message, so the response never says which part was wrong. */
+    @ExceptionHandler(AuthenticationException.class)
+    ProblemDetail handleAuthentication(AuthenticationException ex) {
+        return problem(HttpStatus.UNAUTHORIZED, "Unauthorized", "Invalid username or password.");
     }
 
     @ExceptionHandler(NotFoundException.class)
